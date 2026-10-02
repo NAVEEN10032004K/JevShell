@@ -1,0 +1,6 @@
+# Runtime. Install the project itself (`pip install .`) rather than this file;
+# it is kept for environments that pin dependencies separately.
+requests>=2.31
+
+# Development: pip install -e '.[dev]'
+pytest>=8

@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JevShell</title>
+<meta name="description" content="A Unix shell with a deterministic safety policy and optional natural-language commands.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column, terminal blocks as the recurring motif, full-bleed
+   rules separating sections. Dark-first, because this is a shell. */
+:root {
+  --bg:        #101216;
+  --surface:   #171a20;
+  --surface-2: #1c2027;
+  --line:      #282d36;
+  --line-soft: #1f242b;
+  --fg:        #e5e8ec;
+  --muted:     #8b939e;
+  --faint:     #5c636d;
+  --accent:    #7fd1c1;
+  --allow:     #74b96d;
+  --confirm:   #dba94f;
+  --block:     #e0745f;
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:        #f5f5f2;
+    --surface:   #ffffff;
+    --surface-2: #ecece8;
+    --line:      #d8d8d2;
+    --line-soft: #e6e6e1;
+    --fg:        #171a1e;
+    --muted:     #5a6169;
+    --faint:     #868d95;
+    --accent:    #136b5c;
+    --allow:     #3a7334;
+    --confirm:   #8a5e0e;
+    --block:     #ab3a27;
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg:        #f5f5f2;
+  --surface:   #ffffff;
+  --surface-2: #ecece8;
+  --line:      #d8d8d2;
+  --line-soft: #e6e6e1;
+  --fg:        #171a1e;
+  --muted:     #5a6169;
+  --faint:     #868d95;
+  --accent:    #136b5c;
+  --allow:     #3a7334;
+  --confirm:   #8a5e0e;
+  --block:     #ab3a27;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--display);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; }
+
+.wrap {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding-inline: 20px;
+}
+
+section { padding-block: 64px; border-top: 1px solid var(--line-soft); }
+section:first-of-type { border-top: 0; }
+
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; margin-bottom: 8px; }
+h3 { font-size: 1rem; margin-bottom: 6px; }
+p { margin: 0 0 16px; max-width: 62ch; }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent); }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+  margin: 0 0 20px;
+}
+
+.lede { color: var(--muted); font-size: 1.0625rem; }
+
+code, kbd { font-family: var(--mono); font-size: 0.875em; }
+
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.mark {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+.mark .caret { color: var(--accent); }
+
+.masthead nav { display: flex; gap: 18px; font-size: 0.85rem; }
+.masthead nav a { color: var(--muted); text-decoration: none; }
+.masthead nav a:hover { color: var(--fg); }
+
+/* ---------- hero ---------- */
+
+.hero { padding-block: 56px 48px; }
+
+.hero h1 {
+  font-size: clamp(2.25rem, 8vw, 3.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  margin-bottom: 18px;
+}
+
+.hero .lede { font-size: 1.125rem; max-width: 54ch; }
+
+.version {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 22px;
+}
+.version b { color: var(--accent); font-weight: 500; }
+
+/* ---------- terminal ---------- */
+
+.term {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-block: 28px;
+}
+
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.term-title {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+}
+
+.term-body {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.75;
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 320px;
+  min-width: 0;
+}
+
+.term-body .ps { color: var(--accent); }
+.term-body .cmd { color: var(--fg); }
+.term-body .out { color: var(--muted); }
+.term-body .ai { color: var(--confirm); }
+.term-body .bad { color: var(--block); }
+.term-body .ok { color: var(--allow); }
+
+.cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: blink 1.1s steps(2, start) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.term-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ghost {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.ghost:hover { color: var(--fg); border-color: var(--muted); }
+
+/* ---------- install ---------- */
+
+.install {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  overflow: hidden;
+  max-width: 420px;
+}
+.install code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 11px 14px;
+  font-size: 0.8125rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.install code::before { content: "$ "; color: var(--faint); }
+
+.copy {
+  flex: 0 0 auto;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-inline: 14px;
+  cursor: pointer;
+}
+.copy:hover { color: var(--fg); }
+.copy[data-done="1"] { color: var(--allow); }
+
+.note { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); margin-top: 10px; }
+
+/* ---------- guarantee ---------- */
+
+.rules { display: grid; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 5px; overflow: hidden; margin-top: 24px; }
+.rule { background: var(--bg); padding: 18px 20px; }
+.rule h3 { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--accent); font-weight: 500; }
+.rule p { font-size: 0.9375rem; color: var(--muted); margin: 0; }
+
+/* ---------- flow diagram ---------- */
+
+.flow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  margin-top: 26px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.node {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 8px 16px;
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.node small { display: block; color: var(--faint); font-size: 0.72em; letter-spacing: 0.04em; }
+.node.key { border-color: var(--accent); color: var(--accent); }
+.arrow { color: var(--faint); line-height: 1; }
+
+.split { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.branch { flex: 1 1 180px; display: grid; gap: 8px; justify-items: center; min-width: 0; }
+.branch .label { color: var(--faint); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.verdicts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.v { font-size: 0.72rem; letter-spacing: 0.08em; padding: 5px 12px; border-radius: 3px; border: 1px solid; }
+.v.allow { color: var(--allow); border-color: var(--allow); }
+.v.confirm { color: var(--confirm); border-color: var(--confirm); }
+.v.block { color: var(--block); border-color: var(--block); }
+
+/* ---------- playground ---------- */
+
+.pg { margin-top: 24px; display: grid; gap: 14px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px 10px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip:hover { color: var(--fg); border-color: var(--muted); }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); background: var(--surface-2); }
+
+.verdict {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 16px 18px;
+  display: grid;
+  gap: 6px;
+}
+.verdict[data-level="allow"]   { border-left-color: var(--allow); }
+.verdict[data-level="confirm"] { border-left-color: var(--confirm); }
+.verdict[data-level="block"]   { border-left-color: var(--block); }
+
+.verdict .line { font-family: var(--mono); font-size: 0.85rem; overflow-x: auto; white-space: pre; min-width: 0; }
+.verdict .tag { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; }
+.verdict[data-level="allow"]   .tag { color: var(--allow); }
+.verdict[data-level="confirm"] .tag { color: var(--confirm); }
+.verdict[data-level="block"]   .tag { color: var(--block); }
+.verdict .why { font-size: 0.9rem; color: var(--muted); }
+
+/* ---------- feature table ---------- */
+
+.tbl { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 0.9rem; }
+.tbl th, .tbl td { text-align: left; padding: 11px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { width: 34%; font-weight: 500; color: var(--fg); }
+.tbl td { color: var(--muted); font-family: var(--mono); font-size: 0.8125rem; }
+.tbl tr:last-child th, .tbl tr:last-child td { border-bottom: 0; }
+
+.codes { width: 100%; border-collapse: collapse; margin-top: 18px; font-family: var(--mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.codes td { padding: 7px 0; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.codes td:first-child { width: 68px; color: var(--fg); }
+.codes tr:last-child td { border-bottom: 0; }
+
+/* ---------- limits ---------- */
+
+.limits { margin: 20px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.limits li { padding-left: 20px; position: relative; color: var(--muted); font-size: 0.9375rem; }
+.limits li::before { content: "—"; position: absolute; left: 0; color: var(--faint); }
+.limits b { color: var(--fg); font-weight: 500; }
+
+/* ---------- footer ---------- */
+
+footer { border-top: 1px solid var(--line-soft); padding-block: 32px 48px; }
+.foot-row { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: baseline; }
+.foot-row p { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); margin: 0; }
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 22px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.links a {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.links a:hover { color: var(--fg); }
+.links a::before { content: "→"; color: var(--faint); }
+.links a:hover::before { color: var(--accent); }
+
+@media (max-width: 560px) {
+  section { padding-block: 48px; }
+  .masthead nav { gap: 14px; }
+  .tbl th { width: 42%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor { animation: none; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:0">
+    <span class="mark"><span class="caret">&gt;</span> jevsh</span>
+    <nav>
+      <a href="#safety">Safety</a>
+      <a href="#language">Language</a>
+      <a href="#install">Install</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="wrap">
+      <p class="version">Version <b>0.5.0</b> &middot; Python 3.10+</p>
+      <h1>A shell that knows when to say no.</h1>
+      <p class="lede">
+        JevShell runs your commands like any Unix shell, grades every one of them against a
+        deterministic safety policy first, and understands plain English when you'd rather not
+        remember the flags.
+      </p>
+
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="term-title">jevsh — 80×24</span>
+        </div>
+        <pre class="term-body" id="screen" aria-live="off"><span class="out">JevShell 0.5.0</span>
+
+<span class="ps">jevsh ~/code&gt;</span> <span class="cmd">ls | grep .py</span>
+<span class="out">parser.py
+executor.py</span>
+
+<span class="ps">jevsh ~/code&gt;</span> <span class="cmd">create a folder called reports</span>
+
+<span class="ai">Jev:</span>
+<span class="ai">  Intent: create directory</span>
+<span class="ai">  Target: reports</span>
+
+<span class="ps">jevsh ~/code&gt;</span> <span class="cmd">rm -rf /</span>
+<span class="bad">Command blocked:</span>
+<span class="bad">    Refusing to delete the filesystem root.</span>
+
+<span class="ps">jevsh ~/code&gt;</span> </pre>
+        <div class="term-foot">
+          <button class="ghost" id="replay" type="button">Replay</button>
+        </div>
+      </div>
+
+      <div class="install">
+        <code id="install-cmd">pip install .</code>
+        <button class="copy" id="copy" type="button" aria-label="Copy install command">Copy</button>
+      </div>
+      <p class="note">One runtime dependency: requests. 387 tests, none of which touch the network.</p>
+    </div>
+  </section>
+
+  <section id="guarantee">
+    <div class="wrap">
+      <p class="eyebrow">The contract</p>
+      <h2>The model classifies. It never executes.</h2>
+      <p>
+        Most AI shells ask a language model to write a command and then run the text it returns.
+        JevShell does not have that code path. Jev answers a multiple-choice question with one of
+        five operations; deterministic code turns that answer into an argument list.
+      </p>
+
+      <div class="rules">
+        <div class="rule">
+          <h3>No generated shell strings</h3>
+          <p>Jev's reply is one of five enum members. Anything else raises before it reaches a command, so there is no path from model output to execution.</p>
+        </div>
+        <div class="rule">
+          <h3>No shell=True, anywhere</h3>
+          <p>Every process is an explicit Popen with its own argument list, stdin, stdout, cwd and environment. Three call sites, all intentional.</p>
+        </div>
+        <div class="rule">
+          <h3>No AI in the safety decision</h3>
+          <p>The policy engine is ordinary Python and never calls Jev. The model may propose an action; it cannot authorize one.</p>
+        </div>
+      </div>
+
+      <div class="flow" aria-label="Command flow from input through safety to the executor">
+        <div class="node">input line</div>
+        <div class="arrow">↓</div>
+        <div class="node key">router <small>deterministic, offline</small></div>
+        <div class="arrow">↓</div>
+        <div class="split">
+          <div class="branch">
+            <span class="label">recognised command</span>
+            <div class="node">parser</div>
+          </div>
+          <div class="branch">
+            <span class="label">plain english</span>
+            <div class="node">Jev → intent</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node">command tree</div>
+        <div class="arrow">↓</div>
+        <div class="node key">safety policy <small>never calls Jev</small></div>
+        <div class="arrow">↓</div>
+        <div class="verdicts">
+          <span class="v allow">ALLOW</span>
+          <span class="v confirm">CONFIRM</span>
+          <span class="v block">BLOCK</span>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node">executor</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="safety">
+    <div class="wrap">
+      <p class="eyebrow">Policy</p>
+      <h2>Every command gets a verdict first.</h2>
+      <p>
+        The policy reads the whole command tree, so a dangerous command cannot hide behind an alias,
+        a variable, a pipe, a chain, a redirect or a background ampersand. Pick one and see what the
+        engine returns.
+      </p>
+
+      <div class="pg">
+        <div class="chips" id="chips" role="group" aria-label="Example commands"></div>
+        <div class="verdict" id="verdict" data-level="block">
+          <code class="line" id="v-line">rm -rf /</code>
+          <span class="tag" id="v-tag">BLOCK</span>
+          <span class="why" id="v-why">Refusing to delete the filesystem root.</span>
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:14px">
+        A BLOCK is never offered a prompt. There is no answer that makes it run.
+      </p>
+    </div>
+  </section>
+
+  <section id="language">
+    <div class="wrap">
+      <p class="eyebrow">Natural language</p>
+      <h2>Only when you're not writing a command.</h2>
+      <p>
+        Routing is deterministic and happens before any network call. A first word that is a builtin,
+        an alias or something on your <code>PATH</code> is a command. A line containing a shell
+        operator is a command. Only input that would otherwise fail with
+        <code>command not found</code> reaches Jev, so typing <code>ls</code> never costs a round trip.
+      </p>
+
+      <table class="tbl">
+        <tr><th>create a folder called reports</th><td>→ mkdir reports</td></tr>
+        <tr><th>make an empty file called notes.txt</th><td>→ touch notes.txt</td></tr>
+        <tr><th>show my current directory</th><td>→ pwd</td></tr>
+        <tr><th>list the files here</th><td>→ ls</td></tr>
+        <tr><th>delete notes.txt</th><td>→ rm notes.txt &nbsp;<span style="color:var(--confirm)">confirm</span></td></tr>
+        <tr><th>ai create a folder called src</th><td>→ explicit prefix, always Jev</td></tr>
+      </table>
+
+      <p style="margin-top:22px">
+        Targets come from a deterministic extractor, never from the model, and never from thin air.
+        If a request names no path, the shell says so and waits rather than guessing. Set
+        <code>TYPESAFE_API_KEY</code> to turn this on; without it every other feature works unchanged.
+      </p>
+    </div>
+  </section>
+
+  <section id="shell">
+    <div class="wrap">
+      <p class="eyebrow">The shell</p>
+      <h2>A real one, not a wrapper.</h2>
+
+      <table class="tbl">
+        <tr><th>Builtins</th><td>cd · pwd · history · clear · alias · unalias · export · unset · jobs · exit</td></tr>
+        <tr><th>Pipelines</th><td>a | b | c — any length, status from the last stage</td></tr>
+        <tr><th>Redirection</th><td>&gt; &nbsp; &gt;&gt; &nbsp; &lt;</td></tr>
+        <tr><th>Chaining</th><td>; &nbsp; &amp;&amp; &nbsp; || with short-circuit</td></tr>
+        <tr><th>Background</th><td>cmd &amp; with jobs</td></tr>
+        <tr><th>Expansion</th><td>$VAR · ${VAR} · ~ · globs * ? []</td></tr>
+        <tr><th>Quoting</th><td>single literal, double expands, backslash escapes</td></tr>
+        <tr><th>Signals</th><td>Ctrl+C interrupts the command, Ctrl+D exits</td></tr>
+      </table>
+
+      <h3 style="margin-top:34px">Exit codes mean something</h3>
+      <table class="codes">
+        <tr><td>0</td><td>success</td></tr>
+        <tr><td>1</td><td>the command ran and failed</td></tr>
+        <tr><td>2</td><td>invalid input</td></tr>
+        <tr><td>77</td><td>refused by policy</td></tr>
+        <tr><td>126</td><td>not executable</td></tr>
+        <tr><td>127</td><td>command not found</td></tr>
+        <tr><td>130</td><td>interrupted</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2>Clone, install, run.</h2>
+
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="term-title">setup</span>
+        </div>
+<pre class="term-body" style="min-height:0"><span class="ps">$</span> <span class="cmd">git clone &lt;repository-url&gt; &amp;&amp; cd jevsh</span>
+<span class="ps">$</span> <span class="cmd">python3 -m venv venv &amp;&amp; source venv/bin/activate</span>
+<span class="ps">$</span> <span class="cmd">pip install .</span>
+<span class="ps">$</span> <span class="cmd">jevsh</span>
+
+<span class="out">JevShell 0.5.0</span>
+
+<span class="ps">jevsh ~/jevsh&gt;</span> <span class="cursor"></span></pre>
+      </div>
+
+      <p>
+        Natural language needs a key; everything else does not.
+      </p>
+
+      <table class="tbl">
+        <tr><th>TYPESAFE_API_KEY</th><td>enables natural-language commands</td></tr>
+        <tr><th>JEVSH_JEV_ENABLED=0</th><td>disable Jev entirely, no network</td></tr>
+        <tr><th>JEVSH_LOG_LEVEL=DEBUG</th><td>diagnostics on stderr, never secrets</td></tr>
+        <tr><th>NO_COLOR</th><td>plain output</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="limits">
+    <div class="wrap">
+      <p class="eyebrow">Limitations</p>
+      <h2>What it doesn't do.</h2>
+      <p>Worth knowing before you make it your login shell, which you shouldn't yet.</p>
+
+      <ul class="limits">
+        <li><b>Safety is a guard rail, not a sandbox.</b> Paths are checked before execution, so a path that changes in between defeats the check. The policy reads argument lists, so it cannot see what <code>python script.py</code> will do once it starts.</li>
+        <li><b>No command substitution.</b> <code>$(…)</code> and backticks stay literal text and are never executed. That is deliberate, and tested.</li>
+        <li><b>No subshells, heredocs, brace or arithmetic expansion</b>, and no <code>2&gt;</code> or <code>2&gt;&amp;1</code>.</li>
+        <li><b>No job control.</b> Background jobs are tracked but there is no <code>fg</code>, <code>bg</code> or Ctrl+Z.</li>
+        <li><b>No tab completion, no persistent history.</b> History lives for the session.</li>
+        <li><b>Natural language covers five operations.</b> It cannot express a pipeline or a redirect.</li>
+        <li><b>Confidence is not a sense check.</b> It measures how cleanly the options separated, not whether the request was reasonable. Safety is what protects you.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+
+    <!-- ===================================================================
+         YOUR LINKS — replace the three href values below.
+         Delete any line you don't want; the row reflows on its own.
+         =================================================================== -->
+    <div class="links">
+      <a href="https://www.linkedin.com/in/YOUR-HANDLE" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      <a href="https://x.com/YOUR-HANDLE" target="_blank" rel="noopener noreferrer">X</a>
+      <a href="REPLACE-WITH-RESUME-URL" target="_blank" rel="noopener noreferrer">Résumé</a>
+    </div>
+    <!-- =================================================================== -->
+
+    <div class="foot-row">
+      <p><span style="color:var(--accent)">&gt;</span> jevsh 0.5.0 — MIT</p>
+      <p>Naveen Kenchgunde</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- copy ---------- */
+
+  var copy = document.getElementById("copy");
+  var cmd = document.getElementById("install-cmd");
+
+  copy.addEventListener("click", function () {
+    var text = cmd.textContent;
+
+    function done() {
+      copy.textContent = "Copied";
+      copy.dataset.done = "1";
+      setTimeout(function () {
+        copy.textContent = "Copy";
+        copy.dataset.done = "";
+      }, 1600);
+    }
+
+    function selectInstead() {
+      var range = document.createRange();
+      range.selectNodeContents(cmd);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, selectInstead);
+    } else {
+      selectInstead();
+    }
+  });
+
+  /* ---------- safety playground ---------- */
+
+  var CASES = [
+    { cmd: "rm -rf /", level: "block",
+      why: "Refusing to delete the filesystem root." },
+    { cmd: "rm -rf ~", level: "block",
+      why: "Refusing to delete /Users/you." },
+    { cmd: "rm /etc/passwd", level: "block",
+      why: "Refusing to delete the protected system path /private/etc/passwd." },
+    { cmd: "echo safe ; rm -rf /", level: "block",
+      why: "A safe command on the same line does not shield the dangerous one." },
+    { cmd: "echo data | rm -rf ~", level: "block",
+      why: "Every stage of a pipeline is evaluated, not just the first." },
+    { cmd: "destroy /", level: "block",
+      why: "Aliases expand before the policy sees them, so alias destroy=\"rm -rf\" buys nothing." },
+    { cmd: "$RM -rf /", level: "block",
+      why: "Variables expand first too. The policy sees rm, not $RM." },
+    { cmd: "rm -rf .", level: "block",
+      why: "Paths are resolved first. Run from your home directory, this is rm -rf ~." },
+    { cmd: "rm notes.txt", level: "confirm",
+      why: "Deletes or moves files." },
+    { cmd: "rm -r build/", level: "confirm",
+      why: "Recursively deletes a directory tree. Deletes or moves files." },
+    { cmd: "cp a b", level: "confirm",
+      why: "Overwrites the destination if it already exists." },
+    { cmd: "chmod 755 run.sh", level: "confirm",
+      why: "Changes system or file configuration." },
+    { cmd: "ls -lah", level: "allow", why: "No policy concerns." },
+    { cmd: "echo hi > notes.txt", level: "allow", why: "No policy concerns." },
+    { cmd: "git status", level: "allow", why: "No policy concerns." },
+    { cmd: "cat /etc/hosts", level: "allow",
+      why: "Reading a protected path is fine. Only writes and deletes are restricted." }
+  ];
+
+  var LABEL = { allow: "ALLOW", confirm: "CONFIRM", block: "BLOCK" };
+
+  var chips = document.getElementById("chips");
+  var panel = document.getElementById("verdict");
+  var vLine = document.getElementById("v-line");
+  var vTag = document.getElementById("v-tag");
+  var vWhy = document.getElementById("v-why");
+
+  function show(index) {
+    var c = CASES[index];
+    panel.dataset.level = c.level;
+    vLine.textContent = c.cmd;
+    vTag.textContent = LABEL[c.level];
+    vWhy.textContent = c.why;
+
+    Array.prototype.forEach.call(chips.children, function (node, i) {
+      node.setAttribute("aria-pressed", i === index ? "true" : "false");
+    });
+  }
+
+  CASES.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = c.cmd;
+    b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    b.addEventListener("click", function () { show(i); });
+    chips.appendChild(b);
+  });
+
+  show(0);
+
+  /* ---------- hero terminal replay ---------- */
+
+  var screen = document.getElementById("screen");
+  var resting = screen.innerHTML;
+  var timers = [];
+  var running = false;
+
+  var SCRIPT = [
+    { type: "out", text: "JevShell 0.5.0" },
+    { type: "gap" },
+    { type: "cmd", text: "ls | grep .py" },
+    { type: "out", text: "parser.py\nexecutor.py" },
+    { type: "gap" },
+    { type: "cmd", text: "create a folder called reports" },
+    { type: "gap" },
+    { type: "ai", text: "Jev:\n  Intent: create directory\n  Target: reports" },
+    { type: "gap" },
+    { type: "cmd", text: "rm -rf /" },
+    { type: "bad", text: "Command blocked:\n    Refusing to delete the filesystem root." },
+    { type: "gap" },
+    { type: "prompt" }
+  ];
+
+  var PROMPT = '<span class="ps">jevsh ~/code&gt;</span> ';
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function after(ms, fn) {
+    timers.push(setTimeout(fn, ms));
+  }
+
+  function clearTimers() {
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
+
+  function play() {
+    if (running) return;
+    running = true;
+    clearTimers();
+
+    var html = "";
+    var step = 0;
+    var elapsed = 0;
+
+    function render(extra) {
+      screen.innerHTML = html + (extra || "");
+      screen.scrollTop = screen.scrollHeight;
+    }
+
+    function finish() {
+      running = false;
+      render('<span class="cursor"></span>');
+    }
+
+    function next() {
+      if (step >= SCRIPT.length) { finish(); return; }
+
+      var item = SCRIPT[step++];
+
+      if (item.type === "gap") {
+        html += "\n";
+        render();
+        after(90, next);
+        return;
+      }
+
+      if (item.type === "prompt") {
+        html += PROMPT;
+        finish();
+        return;
+      }
+
+      if (item.type === "cmd") {
+        html += PROMPT;
+        var typed = 0;
+        (function tick() {
+          if (typed > item.text.length) {
+            html += '<span class="cmd">' + esc(item.text) + "</span>\n";
+            render();
+            after(260, next);
+            return;
+          }
+          render('<span class="cmd">' + esc(item.text.slice(0, typed)) + '</span><span class="cursor"></span>');
+          typed += 1;
+          after(34, tick);
+        })();
+        return;
+      }
+
+      html += '<span class="' + item.type + '">' + esc(item.text) + "</span>\n";
+      render();
+      after(item.type === "out" ? 320 : 420, next);
+    }
+
+    screen.innerHTML = "";
+    next();
+    return elapsed;
+  }
+
+  document.getElementById("replay").addEventListener("click", function () {
+    if (running) { clearTimers(); running = false; }
+    play();
+  });
+
+  /* The transcript is already in the HTML, so the page reads correctly before
+     any of this runs. Replay it once on load, unless motion is unwelcome. */
+  if (!calm) {
+    after(400, play);
+  }
+
+  window.addEventListener("pagehide", clearTimers);
+})();
+</script>
+
+</body>
+</html>
